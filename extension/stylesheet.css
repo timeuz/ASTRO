@@ -1,0 +1,32 @@
+.astro-panel-box {
+    spacing: 6px;
+}
+
+.astro-badge {
+    background-color: #3584e4;
+    color: #ffffff;
+    border-radius: 12px;
+    padding: 0 6px;
+    font-size: 10pt;
+    font-weight: bold;
+    text-align: center;
+}
+
+.astro-badge-attention {
+    background-color: #e01b24;
+}
+
+.astro-feed-item {
+    spacing: 8px;
+    padding: 12px;
+}
+
+.astro-action-box {
+    spacing: 8px;
+    margin-top: 8px;
+}
+
+.astro-menu-header {
+    font-weight: bold;
+    font-size: 1.1em;
+}
