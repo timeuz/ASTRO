@@ -1,0 +1,10 @@
+# Rust / Cargo                                                                                                                                                                                                                   
+/daemon/**/target/                                                                                                                                                                                                               
+/daemon/target/                                                                                                                                                                                                                  
+**/*.rs.bk                                                                                                                                                                                                                       
+Cargo.lock                                                                                                                                                                                                                       
+                                                                                                                                                                                                                                     
+# Logs                                                                                                                                                                                                                           
+*.log                                                                                                                                                                                                                            
+.spike_hook.log                                                                                                                                                                                                                  
+/docs/logs/
