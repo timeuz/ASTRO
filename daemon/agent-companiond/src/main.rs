@@ -294,14 +294,20 @@ async fn main() -> Result<()> {
     let _log_guard = setup_logging();
     info!("Starting ASTRO Agent Companion Daemon...");
 
-    let exe_dir = env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-        .unwrap_or_else(|| PathBuf::from("."));
-    
-    let mut microcopy_path = exe_dir.join("microcopy.json");
-    if !microcopy_path.exists() {
-        microcopy_path = PathBuf::from("microcopy.json");
+    let possible_paths = vec![
+        PathBuf::from("microcopy.json"), // CWD
+        PathBuf::from("../microcopy.json"), // Cargo run from daemon/
+        PathBuf::from("../../microcopy.json"), // Cargo run from daemon/agent-companiond/
+        env::current_exe().unwrap_or_default().parent().unwrap_or_else(|| std::path::Path::new("")).join("microcopy.json"),
+        PathBuf::from("/usr/share/astro-agent-companion/microcopy.json"),
+    ];
+
+    let mut microcopy_path = PathBuf::from("microcopy.json");
+    for path in possible_paths {
+        if path.exists() {
+            microcopy_path = path;
+            break;
+        }
     }
 
     let engine = match MicrocopyEngine::load(&microcopy_path) {

@@ -1,3 +1,4 @@
 systemd/user/agent-companiond.service usr/lib/systemd/user/
 scripts/install-hooks.sh usr/share/astro-agent-companion/scripts/
 scripts/uninstall-hooks.sh usr/share/astro-agent-companion/scripts/
+microcopy.json usr/share/astro-agent-companion/
