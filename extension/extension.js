@@ -144,6 +144,7 @@ class AstroIndicator extends PanelMenu.Button {
                 (proxy, error) => {
                     if (error) {
                         console.error(`[ASTRO] Failed to connect to D-Bus: ${error.message}`);
+                        this._markAllDisconnected();
                         this._updateBadge();
                         return;
                     }
@@ -176,6 +177,12 @@ class AstroIndicator extends PanelMenu.Button {
         
         this._updateBadge();
         this._addEventToFeed(session);
+    }
+    
+    _markAllDisconnected() {
+        for (let item of this._feedItems) {
+            item.label = 'Disconnected';
+        }
     }
     
     _updateBadge() {
