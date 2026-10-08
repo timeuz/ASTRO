@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "remove" ]; then
+    echo "ASTRO Agent Companion package is being removed."
+    echo "Remember to run /usr/share/astro-agent-companion/scripts/uninstall-hooks.sh for users who installed hooks."
+fi
+
+#DEBHELPER#
+exit 0

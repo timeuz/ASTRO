@@ -1,0 +1,13 @@
+[Unit]
+Description=ASTRO Agent Companion Daemon
+Documentation=man:agent-companiond(1)
+ConditionUser=!root
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/agent-companiond
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

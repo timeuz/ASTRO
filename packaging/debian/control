@@ -1,0 +1,14 @@
+Source: astro-agent-companion
+Section: utils
+Priority: optional
+Maintainer: DevOps Automator <devops@astro.project>
+Build-Depends: debhelper (>= 11)
+Standards-Version: 4.1.3
+
+Package: astro-agent-companion
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, jq
+Description: ASTRO Agent Companion Daemon and Hooks
+ Provides the agent-companiond background service and automated
+ hook management for Gemini CLI / Agent integration.
+ Designed for Ubuntu 26.04.

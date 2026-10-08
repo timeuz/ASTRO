@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "configure" ]; then
+    echo "ASTRO Agent Companion package installed."
+    echo "To install hooks for your user, run: /usr/share/astro-agent-companion/scripts/install-hooks.sh"
+    echo "To enable the service for your user, run: systemctl --user enable --now agent-companiond.service"
+fi
+
+#DEBHELPER#
+exit 0
