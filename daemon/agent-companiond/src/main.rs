@@ -311,6 +311,7 @@ async fn main() -> Result<()> {
         PathBuf::from("../microcopy.json"), // Cargo run from daemon/
         PathBuf::from("../../microcopy.json"), // Cargo run from daemon/agent-companiond/
         env::current_exe().unwrap_or_default().parent().unwrap_or_else(|| std::path::Path::new("")).join("microcopy.json"),
+        PathBuf::from(env::var("HOME").unwrap_or_else(|_| "".to_string())).join(".config/astro-agent-companion/microcopy.json"),
         PathBuf::from("/usr/share/astro-agent-companion/microcopy.json"),
     ];
 
