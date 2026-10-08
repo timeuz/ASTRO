@@ -1,0 +1,12 @@
+{
+  "version": "1.0",
+  "agent_name": "Antigravity",
+  "session_id": "session-12345",
+  "event_type": "error",
+  "state": "failed",
+  "timestamp": 1729000010,
+  "payload": {
+    "error_code": "EPERM",
+    "details": "[REDACTED]"
+  }
+}

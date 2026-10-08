@@ -29,12 +29,17 @@ pub enum SessionState {
     Disconnected,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-struct DummyEvent {
-    event_type: String,
-    state: Option<SessionState>,
-    payload: String,
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CanonicalEvent {
+    pub version: String,
+    pub agent_name: String,
+    pub session_id: String,
+    pub event_type: String, // e.g. "tool_call", "message", "error"
+    pub state: Option<SessionState>,
+    pub timestamp: u64,
+    pub payload: serde_json::Value,
 }
+
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -210,32 +215,39 @@ async fn run_uds(engine: Arc<Mutex<MicrocopyEngine>>) -> Result<()> {
 
                 let engine_clone = engine.clone();
                 tokio::spawn(async move {
-                    let mut buf = vec![0; 1024];
+                    use tokio::io::{AsyncBufReadExt, BufReader};
+                    let mut reader = BufReader::new(socket);
+                    let mut line = String::new();
+                    // We will not store deduplication history here because this is a new spawned task per connection.
+                    // If we want global dedup, it should be in an Arc<Mutex<HashSet>> passed to UDS.
+                    // For now, let's just parse the line securely.
                     loop {
-                        match socket.read(&mut buf).await {
+                        line.clear();
+                        match reader.read_line(&mut line).await {
                             Ok(0) => break, // Connection closed
-                            Ok(n) => {
-                                let received = &buf[..n];
-                                if let Ok(mut event) = serde_json::from_slice::<DummyEvent>(received) {
-                                    let len = event.payload.len();
-                                    event.payload = format!("[REDACTED, len={}]", len);
-                                    info!("Received UDS Event: {:?}", event);
-                                    
-                                    if let Ok(mut eng) = engine_clone.lock() {
-                                        // Try getting a message for the event
-                                        if let Some(msg) = eng.get_message(&event.event_type, &Severity::Info) {
-                                            info!("Microcopy message: {}", msg);
+                            Ok(_) => {
+                                match serde_json::from_str::<CanonicalEvent>(&line) {
+                                    Ok(mut event) => {
+                                        // Sanitize payload
+                                        event.payload = serde_json::json!({ "redacted": true, "msg": "Payload sanitizado para evitar vazamento" });
+                                        info!("Received UDS Event: type={} agent={} session={} timestamp={}", event.event_type, event.agent_name, event.session_id, event.timestamp);
+                                        
+                                        if let Ok(mut eng) = engine_clone.lock() {
+                                            if let Some(msg) = eng.get_message(&event.event_type, &Severity::Info) {
+                                                info!("Microcopy message: {}", msg);
+                                            }
+                                        }
+
+                                        let response = b"OK\n";
+                                        if let Err(e) = reader.get_mut().write_all(response).await {
+                                            error!("Failed to write response: {}", e);
                                         }
                                     }
-
-                                    let response = b"OK\n";
-                                    if let Err(e) = socket.write_all(response).await {
-                                        error!("Failed to write response: {}", e);
+                                    Err(e) => {
+                                        error!("Failed to parse JSON schema: {}", e);
+                                        let response = b"ACK\n";
+                                        let _ = reader.get_mut().write_all(response).await;
                                     }
-                                } else {
-                                    info!("Received Raw UDS data");
-                                    let response = b"ACK\n";
-                                    let _ = socket.write_all(response).await;
                                 }
                             }
                             Err(e) => {

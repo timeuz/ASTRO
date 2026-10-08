@@ -1,0 +1,12 @@
+{
+  "version": "1.0",
+  "agent_name": "Antigravity",
+  "session_id": "session-12345",
+  "event_type": "working",
+  "state": "working",
+  "timestamp": 1729000005,
+  "payload": {
+    "tool": "run_command",
+    "args": "[REDACTED]"
+  }
+}
