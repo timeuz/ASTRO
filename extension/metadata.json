@@ -1,0 +1,7 @@
+{
+  "name": "ASTRO Spike",
+  "description": "ASTRO Phase 0 Spike - Panel Indicator & D-Bus",
+  "uuid": "astro-spike@astro.project.org",
+  "shell-version": ["45", "46", "47"],
+  "url": ""
+}
