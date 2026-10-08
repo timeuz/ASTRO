@@ -1,0 +1,10 @@
+{
+  "event": "session_start",
+  "session_id": "test-session-123",
+  "agent": "Antigravity",
+  "timestamp": 1791502013,
+  "payload": {
+    "redacted": true,
+    "msg": "Prompt sanitizado para CI"
+  }
+}

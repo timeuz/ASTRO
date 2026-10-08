@@ -1,0 +1,10 @@
+{
+  "event": "conclusion",
+  "session_id": "test-session-123",
+  "agent": "Antigravity",
+  "timestamp": 1791502015,
+  "status": "success",
+  "payload": {
+    "redacted": true
+  }
+}
