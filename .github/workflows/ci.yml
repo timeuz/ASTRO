@@ -1,0 +1,26 @@
+name: ASTRO CI
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      
+    - name: Build Daemon
+      run: cargo build --manifest-path daemon/agent-companiond/Cargo.toml
+      
+    - name: Run Tests Daemon
+      run: cargo test --manifest-path daemon/agent-companiond/Cargo.toml
+      
+    - name: Build Hook
+      run: cargo build --manifest-path daemon/agent-companion-hook/Cargo.toml

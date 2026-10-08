@@ -369,3 +369,34 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_severity_forces_neutral() {
+        assert!(Severity::Error.forces_neutral());
+        assert!(Severity::Security.forces_neutral());
+        assert!(Severity::DataLoss.forces_neutral());
+        assert!(Severity::Permission.forces_neutral());
+        assert!(!Severity::Info.forces_neutral());
+        assert!(!Severity::Warning.forces_neutral());
+    }
+
+    #[test]
+    fn test_microcopy_engine_neutral_fallback() {
+        let config = MicrocopyConfig {
+            categories: {
+                let mut map = HashMap::new();
+                map.insert("error".to_string(), CategoryConfig {
+                    neutral: vec!["Fallback neutral".to_string()],
+                    jokes: vec![],
+                });
+                map
+            }
+        };
+        let mut engine = MicrocopyEngine::new(config);
+        assert_eq!(engine.get_message("error", &Severity::Error), Some("Fallback neutral".to_string()));
+    }
+}
