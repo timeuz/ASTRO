@@ -3,6 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixListener;
 use tokio::signal;
@@ -33,8 +36,99 @@ struct DummyEvent {
     payload: String,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Severity {
+    Info,
+    Warning,
+    Error,
+    Security,
+    DataLoss,
+    Permission,
+}
+
+impl Severity {
+    pub fn forces_neutral(&self) -> bool {
+        matches!(
+            self,
+            Severity::Error | Severity::Security | Severity::DataLoss | Severity::Permission
+        )
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CategoryConfig {
+    pub neutral: Vec<String>,
+    #[serde(default)]
+    pub jokes: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct MicrocopyConfig {
+    pub categories: HashMap<String, CategoryConfig>,
+}
+
+pub struct MicrocopyEngine {
+    pub config: MicrocopyConfig,
+    pub neutral_mode: bool,
+    pub joke_cooldown: Duration,
+    pub last_joke_time: Option<Instant>,
+    pub used_jokes: HashSet<String>,
+}
+
+impl MicrocopyEngine {
+    pub fn new(config: MicrocopyConfig) -> Self {
+        Self {
+            config,
+            neutral_mode: false,
+            joke_cooldown: Duration::from_secs(60),
+            last_joke_time: None,
+            used_jokes: HashSet::new(),
+        }
+    }
+
+    pub fn load(path: &PathBuf) -> Result<Self> {
+        let data = fs::read_to_string(path).context("Failed to read microcopy config")?;
+        let config: MicrocopyConfig = serde_json::from_str(&data).context("Failed to parse microcopy config")?;
+        Ok(Self::new(config))
+    }
+
+    pub fn set_neutral_mode(&mut self, enabled: bool) {
+        self.neutral_mode = enabled;
+    }
+
+    pub fn get_message(&mut self, category: &str, severity: &Severity) -> Option<String> {
+        let cat_config = self.config.categories.get(category)?;
+
+        let force_neutral = self.neutral_mode || severity.forces_neutral();
+        
+        let now = Instant::now();
+        let in_cooldown = self
+            .last_joke_time
+            .map(|t| now.duration_since(t) < self.joke_cooldown)
+            .unwrap_or(false);
+
+        if force_neutral || in_cooldown || cat_config.jokes.is_empty() {
+            return cat_config.neutral.first().cloned();
+        }
+
+        for joke in &cat_config.jokes {
+            if !self.used_jokes.contains(joke) {
+                self.used_jokes.insert(joke.clone());
+                self.last_joke_time = Some(now);
+                return Some(joke.clone());
+            }
+        }
+
+        // Fallback to neutral if all jokes used
+        cat_config.neutral.first().cloned()
+    }
+}
+
 // D-Bus interface
-struct AgentCompanion;
+struct AgentCompanion {
+    engine: Arc<Mutex<MicrocopyEngine>>,
+}
 
 #[interface(name = "org.astro.AgentCompanion")]
 impl AgentCompanion {
@@ -47,14 +141,32 @@ impl AgentCompanion {
         let len = payload.len();
         let sanitized = format!("[REDACTED, len={}]", len);
         info!("Received D-Bus event: type={} payload={}", event_type, sanitized);
-        "Event received".to_string()
+        
+        // Example usage of engine
+        let mut msg = String::new();
+        if let Ok(mut engine) = self.engine.lock() {
+            if let Some(m) = engine.get_message(&event_type, &Severity::Info) {
+                msg = m;
+            }
+        }
+        format!("Event received. Msg: {}", msg)
+    }
+
+    async fn set_neutral_mode(&self, enabled: bool) -> String {
+        info!("Received D-Bus set_neutral_mode: {}", enabled);
+        if let Ok(mut engine) = self.engine.lock() {
+            engine.set_neutral_mode(enabled);
+            format!("Neutral mode set to {}", enabled)
+        } else {
+            "Failed to lock engine".to_string()
+        }
     }
 }
 
-async fn run_dbus() -> Result<()> {
+async fn run_dbus(engine: Arc<Mutex<MicrocopyEngine>>) -> Result<()> {
     let _conn = connection::Builder::session()?
         .name("org.astro.AgentCompanion")?
-        .serve_at("/org/astro/AgentCompanion", AgentCompanion)?
+        .serve_at("/org/astro/AgentCompanion", AgentCompanion { engine })?
         .build()
         .await?;
 
@@ -65,7 +177,7 @@ async fn run_dbus() -> Result<()> {
     Ok(())
 }
 
-async fn run_uds() -> Result<()> {
+async fn run_uds(engine: Arc<Mutex<MicrocopyEngine>>) -> Result<()> {
     let xdg_runtime_dir = env::var("XDG_RUNTIME_DIR").context("XDG_RUNTIME_DIR must be set for security")?;
     let socket_path = PathBuf::from(xdg_runtime_dir).join("astro-agent.sock");
 
@@ -96,6 +208,7 @@ async fn run_uds() -> Result<()> {
                     continue;
                 }
 
+                let engine_clone = engine.clone();
                 tokio::spawn(async move {
                     let mut buf = vec![0; 1024];
                     loop {
@@ -107,6 +220,14 @@ async fn run_uds() -> Result<()> {
                                     let len = event.payload.len();
                                     event.payload = format!("[REDACTED, len={}]", len);
                                     info!("Received UDS Event: {:?}", event);
+                                    
+                                    if let Ok(mut eng) = engine_clone.lock() {
+                                        // Try getting a message for the event
+                                        if let Some(msg) = eng.get_message(&event.event_type, &Severity::Info) {
+                                            info!("Microcopy message: {}", msg);
+                                        }
+                                    }
+
                                     let response = b"OK\n";
                                     if let Err(e) = socket.write_all(response).await {
                                         error!("Failed to write response: {}", e);
@@ -173,14 +294,39 @@ async fn main() -> Result<()> {
     let _log_guard = setup_logging();
     info!("Starting ASTRO Agent Companion Daemon...");
 
-    let _dbus_task = tokio::spawn(async {
-        if let Err(e) = run_dbus().await {
+    let exe_dir = env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .unwrap_or_else(|| PathBuf::from("."));
+    
+    let mut microcopy_path = exe_dir.join("microcopy.json");
+    if !microcopy_path.exists() {
+        microcopy_path = PathBuf::from("microcopy.json");
+    }
+
+    let engine = match MicrocopyEngine::load(&microcopy_path) {
+        Ok(engine) => {
+            info!("Loaded microcopy config from {}", microcopy_path.display());
+            engine
+        }
+        Err(e) => {
+            error!("Failed to load microcopy config: {}. Proceeding with empty config.", e);
+            MicrocopyEngine::new(MicrocopyConfig { categories: HashMap::new() })
+        }
+    };
+    
+    let engine = Arc::new(Mutex::new(engine));
+
+    let engine_dbus = engine.clone();
+    let _dbus_task = tokio::spawn(async move {
+        if let Err(e) = run_dbus(engine_dbus).await {
             error!("D-Bus server failed: {}", e);
         }
     });
 
-    let _uds_task = tokio::spawn(async {
-        if let Err(e) = run_uds().await {
+    let engine_uds = engine.clone();
+    let _uds_task = tokio::spawn(async move {
+        if let Err(e) = run_uds(engine_uds).await {
             error!("UDS server failed: {}", e);
         }
     });
