@@ -1,79 +1,51 @@
 {
-  "metadata": {
-    "version": "1.0.0",
-    "language": "pt-BR",
-    "description": "Catálogo de microcopy com personalidade para eventos normais e neutralidade estrita para eventos de risco.",
-    "global_rules": {
-      "deduplication": true,
-      "default_cooldown_seconds": 15
-    }
-  },
-  "events": {
-    "normal": {
-      "starting": {
-        "cooldown_seconds": 5,
-        "templates": [
-          "Bora lá. Já tô resolvendo seu problema.",
-          "Deixa comigo. Aquecendo os motores...",
-          "Iniciando os trabalhos. Senta e relaxa.",
-          "Preparando tudo por aqui. Segura essa emoção."
-        ]
-      },
-      "working": {
-        "cooldown_seconds": 30,
-        "templates": [
-          "Ainda tô aqui, tá? A perfeição exige um tempinho.",
-          "Processando os dados... e fofocando com a CPU. Já acabo.",
-          "Trabalhando nisso. Não precisa ficar clicando sem parar.",
-          "Quase lá. Dando aqueles toques finais de mestre."
-        ]
-      },
-      "completed": {
-        "cooldown_seconds": 0,
-        "templates": [
-          "Prontinho. Nem doeu, né?",
-          "Missão dada é missão cumprida. Tá na mão.",
-          "Finalizado com sucesso. Posso tirar meu intervalo agora?",
-          "Tudo certo por aqui. Pode seguir sua vida."
-        ]
-      }
+  "categories": {
+    "starting": {
+      "neutral": [
+        "Iniciando os trabalhos..."
+      ],
+      "jokes": [
+        "Bora lá. Já tô resolvendo seu problema.",
+        "Deixa comigo. Aquecendo os motores...",
+        "Iniciando os trabalhos. Senta e relaxa.",
+        "Preparando tudo por aqui. Segura essa emoção."
+      ]
     },
-    "risk": {
-      "error": {
-        "cooldown_seconds": 10,
-        "templates": [
-          "Ocorreu um erro inesperado durante o processamento.",
-          "Erro de execução. Não foi possível concluir a ação."
-        ]
-      },
-      "security_failure": {
-        "cooldown_seconds": 5,
-        "templates": [
-          "A operação foi bloqueada por motivos de segurança.",
-          "Falha de segurança detectada. Acesso negado."
-        ]
-      },
-      "data_loss": {
-        "cooldown_seconds": 5,
-        "templates": [
-          "Risco de perda de dados detectado. Operação abortada imediatamente.",
-          "Aviso crítico: Risco à integridade dos dados."
-        ]
-      },
-      "waiting_permission": {
-        "cooldown_seconds": 60,
-        "templates": [
-          "Ação requer aprovação do usuário para prosseguir.",
-          "Aguardando autorização manual para continuar a execução."
-        ]
-      },
-      "failed": {
-        "cooldown_seconds": 10,
-        "templates": [
-          "A execução da tarefa falhou e foi interrompida.",
-          "Processo finalizado com falha."
-        ]
-      }
+    "working": {
+      "neutral": [
+        "Trabalhando..."
+      ],
+      "jokes": [
+        "Ainda tô aqui, tá? A perfeição exige um tempinho.",
+        "Processando os dados... e fofocando com a CPU. Já acabo.",
+        "Trabalhando nisso. Não precisa ficar clicando sem parar.",
+        "Quase lá. Dando aqueles toques finais de mestre."
+      ]
+    },
+    "completed": {
+      "neutral": [
+        "Concluído."
+      ],
+      "jokes": [
+        "Prontinho. Nem doeu, né?",
+        "Missão dada é missão cumprida. Tá na mão.",
+        "Finalizado com sucesso. Posso tirar meu intervalo agora?",
+        "Tudo certo por aqui. Pode seguir sua vida."
+      ]
+    },
+    "failed": {
+      "neutral": [
+        "A execução da tarefa falhou e foi interrompida.",
+        "Processo finalizado com falha."
+      ],
+      "jokes": []
+    },
+    "waiting_permission": {
+      "neutral": [
+        "Ação requer aprovação do usuário para prosseguir.",
+        "Aguardando autorização manual para continuar a execução."
+      ],
+      "jokes": []
     }
   }
 }
