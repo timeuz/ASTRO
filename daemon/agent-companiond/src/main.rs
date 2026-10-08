@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
@@ -8,10 +7,29 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixListener;
 use tokio::signal;
 use zbus::{connection, interface};
+use tracing::{error, info};
+use tracing_subscriber::{fmt, EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_appender::rolling;
+use tracing_appender::non_blocking;
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionState {
+    Starting,
+    Idle,
+    Thinking,
+    Working,
+    WaitingInput,
+    WaitingPermission,
+    Completed,
+    Failed,
+    Disconnected,
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 struct DummyEvent {
     event_type: String,
+    state: Option<SessionState>,
     payload: String,
 }
 
@@ -26,7 +44,9 @@ impl AgentCompanion {
     }
 
     async fn send_event(&self, event_type: String, payload: String) -> String {
-        info!("Received D-Bus event: type={} payload={}", event_type, payload);
+        let len = payload.len();
+        let sanitized = format!("[REDACTED, len={}]", len);
+        info!("Received D-Bus event: type={} payload={}", event_type, sanitized);
         "Event received".to_string()
     }
 }
@@ -46,7 +66,7 @@ async fn run_dbus() -> Result<()> {
 }
 
 async fn run_uds() -> Result<()> {
-    let xdg_runtime_dir = env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/tmp".to_string());
+    let xdg_runtime_dir = env::var("XDG_RUNTIME_DIR").context("XDG_RUNTIME_DIR must be set for security")?;
     let socket_path = PathBuf::from(xdg_runtime_dir).join("astro-agent.sock");
 
     // Remove existing socket if any
@@ -55,11 +75,27 @@ async fn run_uds() -> Result<()> {
     }
 
     let listener = UnixListener::bind(&socket_path).context("Failed to bind UDS")?;
+    
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(&socket_path, fs::Permissions::from_mode(0o600)).context("Failed to set 0600 on socket")?;
+    
     info!("UDS server listening at {}", socket_path.display());
 
     loop {
         match listener.accept().await {
             Ok((mut socket, _addr)) => {
+                // UID validation
+                if let Ok(cred) = socket.peer_cred() {
+                    let daemon_uid = unsafe { libc::geteuid() };
+                    if cred.uid() != daemon_uid {
+                        error!("Rejected connection from UID {} (expected {})", cred.uid(), daemon_uid);
+                        continue;
+                    }
+                } else {
+                    error!("Failed to get peer cred");
+                    continue;
+                }
+
                 tokio::spawn(async move {
                     let mut buf = vec![0; 1024];
                     loop {
@@ -67,15 +103,16 @@ async fn run_uds() -> Result<()> {
                             Ok(0) => break, // Connection closed
                             Ok(n) => {
                                 let received = &buf[..n];
-                                if let Ok(event) = serde_json::from_slice::<DummyEvent>(received) {
+                                if let Ok(mut event) = serde_json::from_slice::<DummyEvent>(received) {
+                                    let len = event.payload.len();
+                                    event.payload = format!("[REDACTED, len={}]", len);
                                     info!("Received UDS Event: {:?}", event);
                                     let response = b"OK\n";
                                     if let Err(e) = socket.write_all(response).await {
                                         error!("Failed to write response: {}", e);
                                     }
                                 } else {
-                                    let text = String::from_utf8_lossy(received);
-                                    info!("Received Raw UDS: {}", text.trim());
+                                    info!("Received Raw UDS data");
                                     let response = b"ACK\n";
                                     let _ = socket.write_all(response).await;
                                 }
@@ -95,9 +132,45 @@ async fn run_uds() -> Result<()> {
     }
 }
 
+fn setup_logging() -> Option<non_blocking::WorkerGuard> {
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let stdout_layer = fmt::layer().with_writer(std::io::stdout);
+
+    // Optional rotating persistence
+    let log_dir = if let Ok(dir) = env::var("ASTRO_LOG_DIR") {
+        PathBuf::from(dir)
+    } else {
+        let home = env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+        let state_home = env::var("XDG_STATE_HOME").unwrap_or_else(|_| format!("{}/.local/state", home));
+        PathBuf::from(state_home).join("astro-agent").join("logs")
+    };
+
+    if let Err(e) = fs::create_dir_all(&log_dir) {
+        eprintln!("Failed to create log directory at {}: {}", log_dir.display(), e);
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(stdout_layer)
+            .init();
+        None
+    } else {
+        let file_appender = rolling::daily(&log_dir, "astro-agent.log");
+        let (non_blocking_appender, guard) = non_blocking(file_appender);
+        let file_layer = fmt::layer().with_writer(non_blocking_appender);
+
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(stdout_layer)
+            .with(file_layer)
+            .init();
+        
+        info!("Logging initialized. Logs are stored in {}", log_dir.display());
+        Some(guard)
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    env_logger::init();
+    let _log_guard = setup_logging();
     info!("Starting ASTRO Agent Companion Daemon...");
 
     let _dbus_task = tokio::spawn(async {
@@ -123,10 +196,11 @@ async fn main() -> Result<()> {
     }
 
     // Cleanup socket on exit
-    let xdg_runtime_dir = env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/tmp".to_string());
-    let socket_path = PathBuf::from(xdg_runtime_dir).join("astro-agent.sock");
-    if socket_path.exists() {
-        let _ = fs::remove_file(socket_path);
+    if let Ok(xdg_runtime_dir) = env::var("XDG_RUNTIME_DIR") {
+        let socket_path = PathBuf::from(xdg_runtime_dir).join("astro-agent.sock");
+        if socket_path.exists() {
+            let _ = fs::remove_file(socket_path);
+        }
     }
 
     Ok(())
