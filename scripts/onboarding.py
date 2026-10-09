@@ -27,9 +27,14 @@ def check_daemon():
 
 def check_extension_status():
     try:
-        # Check if installed
+        # Check if installed according to gnome-extensions CLI
         list_all = subprocess.run(["gnome-extensions", "list"], capture_output=True, text=True).stdout
         if "astro-spike@astro.project.org" not in list_all:
+            # Check if directory exists on disk (needs gnome-shell restart)
+            system_path = "/usr/share/gnome-shell/extensions/astro-spike@astro.project.org"
+            user_path = os.path.expanduser("~/.local/share/gnome-shell/extensions/astro-spike@astro.project.org")
+            if os.path.exists(system_path) or os.path.exists(user_path):
+                return "NEEDS_RESTART"
             return "MISSING"
             
         # Check info to determine state
@@ -87,6 +92,8 @@ Sua principal função é dar a você **visibilidade e controle** sobre o que os
         ext_display = "[green]Ativa[/green]"
     elif ext_status == "DISABLED":
         ext_display = "[yellow]Desativada[/yellow]"
+    elif ext_status == "NEEDS_RESTART":
+        ext_display = "[yellow]Aguardando reinício do GNOME[/yellow]"
     elif ext_status == "MISSING":
         ext_display = "[red]Não encontrada[/red]"
     elif ext_status == "ERROR":
@@ -97,11 +104,26 @@ Sua principal função é dar a você **visibilidade e controle** sobre o que os
     console.print(f"Extensão GNOME: {ext_display}")
     console.print(f"Hooks (Gemini CLI): {'[green]Instalados[/green]' if hook_ok else '[yellow]Não instalados[/yellow]'}")
     print()
+    
+    if not daemon_ok:
+        if Confirm.ask("O Daemon do ASTRO está inativo. Deseja ativá-lo agora para sua sessão?"):
+            console.print("Ativando serviço...")
+            subprocess.run(["systemctl", "--user", "daemon-reload"])
+            subprocess.run(["systemctl", "--user", "enable", "--now", "astro-companion.service"])
+            if check_daemon():
+                console.print("[green]Daemon ativado com sucesso![/green]")
+            else:
+                console.print("[red]Falha ao ativar o daemon. Verifique se o pacote foi instalado corretamente.[/red]")
+        print()
 
     if ext_status != "ENABLED":
         console.print("[yellow]Aviso:[/yellow] A extensão do GNOME não está ativa ou possui problemas.")
         if ext_status == "MISSING":
             console.print("A extensão não foi encontrada no sistema. Verifique a instalação do pacote.")
+        elif ext_status == "NEEDS_RESTART":
+            console.print("A extensão foi instalada no sistema, mas o GNOME Shell ainda não a detectou.")
+            console.print("Por favor, encerre sua sessão (log out) e entre novamente, ou pressione Alt+F2, digite 'r' e tecle Enter (apenas no X11) para reiniciar o GNOME Shell.")
+            console.print("Após reiniciar, execute este assistente novamente para ativar a extensão.")
         elif ext_status == "DISABLED" or ext_status == "UNKNOWN":
             console.print("Para ativar, você pode usar o aplicativo 'Extensões' do GNOME ou executar:")
             console.print("  gnome-extensions enable astro-spike@astro.project.org")
