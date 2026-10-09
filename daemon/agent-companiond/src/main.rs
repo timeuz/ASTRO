@@ -1,5 +1,8 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+
+mod notifications;
+use notifications::NotificationManager;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
@@ -133,6 +136,7 @@ impl MicrocopyEngine {
 // D-Bus interface
 struct AgentCompanion {
     engine: Arc<Mutex<MicrocopyEngine>>,
+    notifier: Arc<Mutex<NotificationManager>>,
 }
 
 #[interface(name = "org.astro.AgentCompanion")]
@@ -154,6 +158,16 @@ impl AgentCompanion {
                 msg = m;
             }
         }
+        
+        // Try parsing event to notify
+        if let Ok(event) = serde_json::from_str::<CanonicalEvent>(&payload) {
+            if let Some(state) = &event.state {
+                if let Ok(mut notifier) = self.notifier.lock() {
+                    notifier.notify_if_needed(&event.agent_name, &event.session_id, state, Some(&msg).filter(|s| !s.is_empty()).map(|s| s.as_str()));
+                }
+            }
+        }
+
         format!("Event received. Msg: {}", msg)
     }
 
@@ -168,10 +182,10 @@ impl AgentCompanion {
     }
 }
 
-async fn run_dbus(engine: Arc<Mutex<MicrocopyEngine>>) -> Result<()> {
+async fn run_dbus(engine: Arc<Mutex<MicrocopyEngine>>, notifier: Arc<Mutex<NotificationManager>>) -> Result<()> {
     let _conn = connection::Builder::session()?
         .name("org.astro.AgentCompanion")?
-        .serve_at("/org/astro/AgentCompanion", AgentCompanion { engine })?
+        .serve_at("/org/astro/AgentCompanion", AgentCompanion { engine, notifier })?
         .build()
         .await?;
 
@@ -182,7 +196,7 @@ async fn run_dbus(engine: Arc<Mutex<MicrocopyEngine>>) -> Result<()> {
     Ok(())
 }
 
-async fn run_uds(engine: Arc<Mutex<MicrocopyEngine>>) -> Result<()> {
+async fn run_uds(engine: Arc<Mutex<MicrocopyEngine>>, notifier: Arc<Mutex<NotificationManager>>) -> Result<()> {
     let xdg_runtime_dir = env::var("XDG_RUNTIME_DIR").context("XDG_RUNTIME_DIR must be set for security")?;
     let socket_path = PathBuf::from(xdg_runtime_dir).join("astro-agent.sock");
 
@@ -214,6 +228,7 @@ async fn run_uds(engine: Arc<Mutex<MicrocopyEngine>>) -> Result<()> {
                 }
 
                 let engine_clone = engine.clone();
+                let notifier_clone = notifier.clone();
                 tokio::spawn(async move {
                     use tokio::io::{AsyncBufReadExt, BufReader};
                     let mut reader = BufReader::new(socket);
@@ -232,11 +247,24 @@ async fn run_uds(engine: Arc<Mutex<MicrocopyEngine>>) -> Result<()> {
                                         event.payload = serde_json::json!({ "redacted": true, "msg": "Payload sanitizado para evitar vazamento" });
                                         info!("Received UDS Event: type={} agent={} session={} timestamp={}", event.event_type, event.agent_name, event.session_id, event.timestamp);
                                         
+                                        let mut microcopy_msg = String::new();
                                         if let Ok(mut eng) = engine_clone.lock() {
                                             if let Some(msg) = eng.get_message(&event.event_type, &Severity::Info) {
                                                 info!("Microcopy message: {}", msg);
+                                                microcopy_msg = msg;
                                             }
                                         }
+
+                                        if let Some(state) = &event.state {
+                                            if let Ok(mut notif) = notifier_clone.lock() {
+                                                notif.notify_if_needed(&event.agent_name, &event.session_id, state, Some(&microcopy_msg).filter(|s| !s.is_empty()).map(|s| s.as_str()));
+                                            }
+                                        }
+
+                                        let _ = std::process::Command::new("dbus-send")
+                                            .args(["--session", "--type=signal", "/org/astro/Service", "org.astro.Service.EventReceived", &format!("string:{}", line)])
+                                            .spawn();
+
 
                                         let response = b"OK\n";
                                         if let Err(e) = reader.get_mut().write_all(response).await {
@@ -335,17 +363,20 @@ async fn main() -> Result<()> {
     };
     
     let engine = Arc::new(Mutex::new(engine));
+    let notifier = Arc::new(Mutex::new(NotificationManager::new(300))); // 60 seconds cooldown
 
     let engine_dbus = engine.clone();
+    let notifier_dbus = notifier.clone();
     let _dbus_task = tokio::spawn(async move {
-        if let Err(e) = run_dbus(engine_dbus).await {
+        if let Err(e) = run_dbus(engine_dbus, notifier_dbus).await {
             error!("D-Bus server failed: {}", e);
         }
     });
 
     let engine_uds = engine.clone();
+    let notifier_uds = notifier.clone();
     let _uds_task = tokio::spawn(async move {
-        if let Err(e) = run_uds(engine_uds).await {
+        if let Err(e) = run_uds(engine_uds, notifier_uds).await {
             error!("UDS server failed: {}", e);
         }
     });

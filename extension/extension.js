@@ -29,7 +29,10 @@ const MAX_FEED_ITEMS = 5;
 
 class SessionFeedItem extends PopupMenu.PopupBaseMenuItem {
     constructor(session, onSilenced) {
-        super({ reactive: false, style_class: 'astro-feed-item' });
+        super({ reactive: true, style_class: 'astro-feed-item' });
+        
+        this.session = session;
+        this.isExpanded = false;
         
         let vbox = new St.BoxLayout({ vertical: true, x_expand: true });
         this.add_child(vbox);
@@ -37,29 +40,40 @@ class SessionFeedItem extends PopupMenu.PopupBaseMenuItem {
         let headerBox = new St.BoxLayout({ x_expand: true });
         vbox.add_child(headerBox);
         
-        let titleText = `Session ${session.id || 'Unknown'}`;
+        let agentName = session.agent_name || 'Gemini CLI';
+        let agentColor = agentName === 'Antigravity' ? '#bb86fc' : '#03dac6';
+        
+        let titleText = `[${agentName}] Session ${session.id || 'Unknown'}`;
         if (session.status) {
             titleText += ` • ${session.status}`;
         }
         
         let title = new St.Label({ 
             text: titleText,
-            style: 'font-weight: bold;',
+            style: `font-weight: bold; color: ${agentColor};`,
             x_expand: true
         });
         title.clutter_text.ellipsize = Pango.EllipsizeMode.END;
         headerBox.add_child(title);
         
-        if (session.text) {
-            let desc = new St.Label({ 
-                text: session.text,
-                style: 'font-size: 0.9em; color: #aaaaaa;'
-            });
-            desc.clutter_text.ellipsize = Pango.EllipsizeMode.END;
-            vbox.add_child(desc);
-        }
+        this.desc = new St.Label({ 
+            text: session.text || '',
+            style: 'font-size: 0.9em; color: #aaaaaa;'
+        });
+        this.desc.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+        vbox.add_child(this.desc);
         
-        let actionBox = new St.BoxLayout({ style_class: 'astro-action-box' });
+        this.detailsBox = new St.BoxLayout({ vertical: true, x_expand: true, visible: false });
+        let detailsText = `State: ${session.state || 'N/A'}\nEvent: ${session.event_type || 'N/A'}\nTimestamp: ${session.timestamp || 'N/A'}`;
+        let detailsLabel = new St.Label({
+            text: detailsText,
+            style: 'font-size: 0.8em; color: #888888; padding-top: 4px;'
+        });
+        this.detailsBox.add_child(detailsLabel);
+        vbox.add_child(this.detailsBox);
+        
+        let actionBox = new St.BoxLayout({ style_class: 'astro-action-box', visible: false });
+        this.actionBox = actionBox;
         vbox.add_child(actionBox);
         
         // Actions
@@ -84,18 +98,40 @@ class SessionFeedItem extends PopupMenu.PopupBaseMenuItem {
             actionBox.add_child(folderBtn);
         }
         
-        let silenceBtn = new St.Button({ label: 'Silence', style_class: 'button', can_focus: true });
-        silenceBtn.connect('clicked', () => {
-            Main.notify('ASTRO', `Silenced session ${session.id}`);
-            if (onSilenced) onSilenced();
-            this.destroy();
+        if (agentName === 'Antigravity') {
+            let unsupportedLabel = new St.Label({
+                text: '(Silence unsupported)',
+                style: 'font-size: 0.8em; color: #888888; margin-top: 4px;',
+                y_align: Clutter.ActorAlign.CENTER
+            });
+            actionBox.add_child(unsupportedLabel);
+        } else {
+            let silenceBtn = new St.Button({ label: 'Silence', style_class: 'button', can_focus: true });
+            silenceBtn.connect('clicked', () => {
+                Main.notify('ASTRO', `Silenced session ${session.id}`);
+                if (onSilenced) onSilenced();
+                this.destroy();
+            });
+            actionBox.add_child(silenceBtn);
+        }
+        
+        this.connect('activate', () => {
+            this.isExpanded = !this.isExpanded;
+            this.detailsBox.visible = this.isExpanded;
+            this.actionBox.visible = this.isExpanded;
+            if (this.isExpanded) {
+                this.desc.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
+                this.desc.clutter_text.line_wrap = true;
+            } else {
+                this.desc.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+                this.desc.clutter_text.line_wrap = false;
+            }
         });
-        actionBox.add_child(silenceBtn);
     }
 }
 
 class AstroIndicator extends PanelMenu.Button {
-    constructor() {
+    constructor(extDir) {
         super(0.0, 'ASTRO Indicator');
         
         this._feedItems = [];
@@ -105,8 +141,11 @@ class AstroIndicator extends PanelMenu.Button {
         // Panel layout
         let box = new St.BoxLayout({ style_class: 'astro-panel-box' });
         
+        let iconPath = extDir + '/icons/astro-symbolic.svg';
+        let gicon = Gio.icon_new_for_string(iconPath);
+        
         this.icon = new St.Icon({
-            icon_name: 'system-run-symbolic',
+            gicon: gicon,
             style_class: 'system-status-icon',
             y_align: Clutter.ActorAlign.CENTER,
         });
@@ -122,17 +161,44 @@ class AstroIndicator extends PanelMenu.Button {
         this.add_child(box);
         
         // Menu Popover
-        let headerItem = new PopupMenu.PopupMenuItem('Agent Sessions', { reactive: false });
-        headerItem.label.add_style_class_name('astro-menu-header');
-        this.menu.addMenuItem(headerItem);
+        let geminiHeaderItem = new PopupMenu.PopupMenuItem('Gemini CLI Sessions', { reactive: false });
+        geminiHeaderItem.label.add_style_class_name('astro-menu-header');
+        this.menu.addMenuItem(geminiHeaderItem);
+        this._geminiSection = new PopupMenu.PopupMenuSection();
+        this.menu.addMenuItem(this._geminiSection);
+        
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
         
-        this._feedSection = new PopupMenu.PopupMenuSection();
-        this.menu.addMenuItem(this._feedSection);
+        let antigravHeaderItem = new PopupMenu.PopupMenuItem('Antigravity Sessions', { reactive: false });
+        antigravHeaderItem.label.add_style_class_name('astro-menu-header');
+        this.menu.addMenuItem(antigravHeaderItem);
+        this._antigravitySection = new PopupMenu.PopupMenuSection();
+        this.menu.addMenuItem(this._antigravitySection);
+        
+        this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        this._emptyStateItem = new PopupMenu.PopupMenuItem('Nenhum agente em atividade. Quando comandos forem processados, eles aparecerão aqui.', { reactive: false });
+        this._emptyStateItem.label.add_style_class_name('astro-empty-state');
+        this._emptyStateItem.label.clutter_text.line_wrap = true;
+        this.menu.addMenuItem(this._emptyStateItem);
         
         this._proxy = null;
         this._signalId = 0;
         this._setupDBus();
+        this._updateEmptyState();
+    }
+    
+    _updateEmptyState() {
+        if (this.sessionCount === 0) {
+            this._emptyStateItem.show();
+            this._geminiSection.actor.hide();
+            this._antigravitySection.actor.hide();
+            this.icon.opacity = 178; // ~70% opacity for inactive
+        } else {
+            this._emptyStateItem.hide();
+            this._geminiSection.actor.show();
+            this._antigravitySection.actor.show();
+            this.icon.opacity = 255;
+        }
     }
     
     async _setupDBus() {
@@ -144,6 +210,7 @@ class AstroIndicator extends PanelMenu.Button {
                 (proxy, error) => {
                     if (error) {
                         console.error(`[ASTRO] Failed to connect to D-Bus: ${error.message}`);
+                        this._markAllDisconnected();
                         this._updateBadge();
                         return;
                     }
@@ -165,7 +232,6 @@ class AstroIndicator extends PanelMenu.Button {
         try {
             session = JSON.parse(message);
         } catch (e) {
-            // Not JSON, wrap it
             session = { id: `msg-${Date.now()}`, text: message, status: 'Active' };
         }
         
@@ -178,6 +244,12 @@ class AstroIndicator extends PanelMenu.Button {
         this._addEventToFeed(session);
     }
     
+    _markAllDisconnected() {
+        for (let item of this._feedItems) {
+            item.label = 'Disconnected';
+        }
+    }
+    
     _updateBadge() {
         this.badge.text = `${this.sessionCount}`;
         if (this.attentionCount > 0) {
@@ -185,11 +257,11 @@ class AstroIndicator extends PanelMenu.Button {
         } else {
             this.badge.style_class = 'astro-badge';
         }
+        this._updateEmptyState();
     }
     
     _addEventToFeed(session) {
         let item = new SessionFeedItem(session, () => {
-            // onSilenced
             const idx = this._feedItems.indexOf(item);
             if (idx > -1) {
                 this._feedItems.splice(idx, 1);
@@ -199,14 +271,21 @@ class AstroIndicator extends PanelMenu.Button {
             this._updateBadge();
         });
         
-        this._feedSection.addMenuItem(item, 0);
+        let agentName = session.agent_name || 'Gemini CLI';
+        if (agentName === 'Antigravity') {
+            this._antigravitySection.addMenuItem(item, 0);
+        } else {
+            this._geminiSection.addMenuItem(item, 0);
+        }
+        
         this._feedItems.unshift(item);
         
-        // Truncate
         if (this._feedItems.length > MAX_FEED_ITEMS) {
             let removedItem = this._feedItems.pop();
-            removedItem.destroy(); // Destroy it from UI
+            removedItem.destroy();
         }
+        
+        this._updateEmptyState();
     }
     
     destroy() {
@@ -226,7 +305,7 @@ export default class AstroExtension extends Extension {
 
     enable() {
         console.log('[ASTRO] Extension enabled');
-        this._indicator = new AstroIndicator();
+        this._indicator = new AstroIndicator(this.dir.get_path());
         Main.panel.addToStatusArea(this.uuid, this._indicator);
     }
 
