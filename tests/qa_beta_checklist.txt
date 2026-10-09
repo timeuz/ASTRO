@@ -1,0 +1,16 @@
+# QA Beta Checklist - ASTRO Sprint 6
+Executado por: Tester Agent
+
+1. "Onde o ASTRO fica no meu desktop?"
+✅ O ASTRO reside como um indicador persistente com ícone próprio (astro-symbolic.svg) no painel superior do GNOME Shell (Top Bar).
+
+2. "Como vejo o que os agentes estão executando agora?"
+✅ Um clique no ícone abre um popover dropdown com os últimos eventos capturados. Expandir um item clicando nele mostra os metadados técnicos (estado, carimbo de data/hora, tipo de evento). 
+
+3. "Em quais momentos o ASTRO vai me interromper?"
+✅ O ASTRO nunca abrirá janelas ativas ou roubará o foco do mouse/teclado.
+✅ O usuário receberá uma notificação discreta no desktop APENAS em eventos finais (Completed, Failed) ou pedidos de atenção (WaitingInput, WaitingPermission).
+✅ Notificações por conclusão podem ser desligadas, categorias podem ser silenciadas individualmente, e o "Modo Neutro" foi consolidado.
+✅ O daemon consolida um "cooldown" de 5 minutos, impedindo tempestades de notificações.
+
+**Decisão Formal:** A experiência de integração do GNOME atende aos mais rígidos critérios de foco e transparência. A beta comunitária está **APROVADA** para lançamento sob os princípios firmados em `docs/sprint6_announcement.md` e a funcionalidade comprovada de isolamento de spam.

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import time
 import sys
+import subprocess
+import os
 
 try:
     from rich.console import Console
@@ -15,12 +17,24 @@ except ImportError:
 
 console = Console()
 
-def print_slow(text, delay=0.01):
-    for char in text:
-        sys.stdout.write(char)
-        sys.stdout.flush()
-        time.sleep(delay)
-    print()
+def check_daemon():
+    try:
+        # Check if daemon is running by looking at processes or pinging dbus
+        result = subprocess.run(["dbus-send", "--session", "--print-reply", "--dest=org.astro.AgentCompanion", "/org/astro/AgentCompanion", "org.freedesktop.DBus.Peer.Ping"], capture_output=True)
+        return result.returncode == 0
+    except Exception:
+        return False
+
+def check_extension():
+    try:
+        result = subprocess.run(["gnome-extensions", "list"], capture_output=True, text=True)
+        return "astro@local" in result.stdout or "astro-extension" in result.stdout
+    except Exception:
+        return False
+
+def check_hook():
+    # Simple check if hook is installed (e.g. wrapper in ~/.local/bin)
+    return os.path.exists(os.path.expanduser("~/.local/bin/gemini"))
 
 def main():
     console.clear()
@@ -39,40 +53,39 @@ Sua principal função é dar a você **visibilidade e controle** sobre o que os
     console.print(Markdown(intro_text))
     time.sleep(1)
     
-    arch_text = """
-### Como Funciona
-
-1. **Daemon Local**: Um processo em segundo plano seguro que recebe sinais dos agentes.
-2. **Extensão GNOME**: Uma interface no painel superior que mostra o estado da sessão.
-3. **Hooks**: Conectores instalados nos agentes (como o Gemini CLI) que enviam os eventos.
-"""
-    console.print(Markdown(arch_text))
-    time.sleep(1)
-    
-    privacy_text = """
-### Privacidade e Segurança em Primeiro Lugar
-
-* O ASTRO **não lê** o conteúdo dos seus prompts ou as respostas da IA.
-* O ASTRO **não envia** nenhum dado para a nuvem. Toda a comunicação é local (Unix Domain Sockets / D-Bus).
-* O ASTRO **não rouba** o foco da tela. As atualizações aparecem discretamente no painel superior.
-* As chaves de API devem ser gerenciadas individualmente por cada agente. O ASTRO não irá solicitá-las.
-"""
-    console.print(Panel(Markdown(privacy_text), title="Privacidade Garantida", border_style="green"))
+    console.print(Panel("Privacidade Garantida: O ASTRO NÃO lê seus prompts, NÃO envia dados para a nuvem e NUNCA pedirá suas chaves de API.", title="Privacidade", border_style="green"))
     print()
-    time.sleep(1)
-    
-    if Confirm.ask("Deseja configurar a integração com o Gemini CLI agora?"):
-        console.print("\n[bold cyan]Executando configuração do hook...[/bold cyan]")
-        time.sleep(1)
-        console.print("Para instalar o hook do Gemini CLI no seu ambiente atual, execute o comando:")
-        console.print("\n    [bold yellow]python3 scripts/cli.py hook install[/bold yellow]\n")
-        console.print("Depois de instalado, as atividades do seu Gemini CLI aparecerão automaticamente no indicador do ASTRO no topo da tela.")
-    else:
-        console.print("\nVocê pode configurar as integrações mais tarde.")
-        console.print("Execute [bold yellow]python3 scripts/cli.py hook install[/bold yellow] quando estiver pronto.")
-        
+
+    console.print("[bold]Diagnosticando o sistema...[/bold]")
+    daemon_ok = check_daemon()
+    ext_ok = check_extension()
+    hook_ok = check_hook()
+
+    console.print(f"Daemon (agent-companiond): {'[green]Ativo[/green]' if daemon_ok else '[red]Inativo[/red]'}")
+    console.print(f"Extensão GNOME: {'[green]Ativa[/green]' if ext_ok else '[yellow]Não encontrada ou Desativada[/yellow]'}")
+    console.print(f"Hooks (Gemini CLI): {'[green]Instalados[/green]' if hook_ok else '[yellow]Não instalados[/yellow]'}")
     print()
-    console.print(Panel("Configuração inicial concluída. O ASTRO está pronto para observar seus agentes.", border_style="cyan"))
+
+    if not ext_ok:
+        console.print("[yellow]Aviso:[/yellow] A extensão do GNOME não parece estar ativa.")
+        console.print("Para ativar, você pode usar o aplicativo 'Extensões' do GNOME ou executar:")
+        console.print("  gnome-extensions enable astro@local")
+        print()
+
+    if not hook_ok:
+        if Confirm.ask("Deseja instalar os conectores (hooks) do Gemini CLI agora?"):
+            console.print("\n[bold cyan]Executando configuração do hook...[/bold cyan]")
+            time.sleep(1)
+            # In a real app we would run the CLI command here
+            console.print("Execute o seguinte comando para instalar o hook no seu ambiente atual:")
+            console.print("\n    [bold yellow]python3 scripts/cli.py hook install[/bold yellow]\n")
+            console.print("O sistema irá solicitar sua permissão caso precise modificar caminhos do sistema.")
+        else:
+            console.print("\nVocê pode configurar as integrações mais tarde.")
+            console.print("Execute [bold yellow]python3 scripts/cli.py hook install[/bold yellow] quando estiver pronto.")
+    
+    print()
+    console.print(Panel("Configuração inicial concluída. Você pode fechar este assistente e abrir novamente quando quiser.", border_style="cyan"))
 
 if __name__ == "__main__":
     main()
