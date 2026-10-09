@@ -1,0 +1,27 @@
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Bem-vindo ao ASTRO                                                           │
+│ Agent Session Tracking & Runtime Observer                                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+O ASTRO é um observador local que conecta seus agentes de IA à interface do seu 
+sistema (GNOME/Wayland). Sua principal função é dar a você visibilidade e       
+controle sobre o que os agentes estão fazendo.                                  
+╭──────────────────────────────── Privacidade ─────────────────────────────────╮
+│ Privacidade Garantida: O ASTRO NÃO lê seus prompts, NÃO envia dados para a   │
+│ nuvem e NUNCA pedirá suas chaves de API.                                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+Diagnosticando o sistema...
+Daemon (agent-companiond): Inativo
+Extensão GNOME: Não encontrada ou Desativada
+Hooks (Gemini CLI): Instalados
+
+Aviso: A extensão do GNOME não parece estar ativa.
+Para ativar, você pode usar o aplicativo 'Extensões' do GNOME ou executar:
+  gnome-extensions enable astro@local
+
+
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Configuração inicial concluída. Você pode fechar este assistente e abrir     │
+│ novamente quando quiser.                                                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
