@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
+mod config;
 mod notifications;
 use notifications::NotificationManager;
 use std::env;
@@ -163,7 +164,7 @@ impl AgentCompanion {
         if let Ok(event) = serde_json::from_str::<CanonicalEvent>(&payload) {
             if let Some(state) = &event.state {
                 if let Ok(mut notifier) = self.notifier.lock() {
-                    notifier.notify_if_needed(&event.agent_name, &event.session_id, state, Some(&msg).filter(|s| !s.is_empty()).map(|s| s.as_str()));
+                    notifier.notify_if_needed(&event.agent_name, &event.session_id, state, Some(&msg).filter(|s| !s.is_empty()).map(|s| s.as_str()), Some(&event.event_type));
                 }
             }
         }
@@ -175,9 +176,46 @@ impl AgentCompanion {
         info!("Received D-Bus set_neutral_mode: {}", enabled);
         if let Ok(mut engine) = self.engine.lock() {
             engine.set_neutral_mode(enabled);
+        }
+        if let Ok(mut notifier) = self.notifier.lock() {
+            notifier.user_config.neutral_mode = enabled;
+            config::ConfigManager::save(&notifier.user_config);
             format!("Neutral mode set to {}", enabled)
         } else {
-            "Failed to lock engine".to_string()
+            "Failed to lock notifier".to_string()
+        }
+    }
+
+    async fn set_notify_completion(&self, enabled: bool) -> String {
+        info!("Received D-Bus set_notify_completion: {}", enabled);
+        if let Ok(mut notifier) = self.notifier.lock() {
+            notifier.user_config.notify_on_completion = enabled;
+            config::ConfigManager::save(&notifier.user_config);
+            format!("Notify completion set to {}", enabled)
+        } else {
+            "Failed to lock notifier".to_string()
+        }
+    }
+
+    async fn mute_category(&self, category: String) -> String {
+        if let Ok(mut notifier) = self.notifier.lock() {
+            if !notifier.user_config.muted_categories.contains(&category) {
+                notifier.user_config.muted_categories.push(category.clone());
+                config::ConfigManager::save(&notifier.user_config);
+            }
+            format!("Muted category {}", category)
+        } else {
+            "Failed to lock notifier".to_string()
+        }
+    }
+
+    async fn unmute_category(&self, category: String) -> String {
+        if let Ok(mut notifier) = self.notifier.lock() {
+            notifier.user_config.muted_categories.retain(|c| c != &category);
+            config::ConfigManager::save(&notifier.user_config);
+            format!("Unmuted category {}", category)
+        } else {
+            "Failed to lock notifier".to_string()
         }
     }
 }
@@ -257,7 +295,7 @@ async fn run_uds(engine: Arc<Mutex<MicrocopyEngine>>, notifier: Arc<Mutex<Notifi
 
                                         if let Some(state) = &event.state {
                                             if let Ok(mut notif) = notifier_clone.lock() {
-                                                notif.notify_if_needed(&event.agent_name, &event.session_id, state, Some(&microcopy_msg).filter(|s| !s.is_empty()).map(|s| s.as_str()));
+                                                notif.notify_if_needed(&event.agent_name, &event.session_id, state, Some(&microcopy_msg).filter(|s| !s.is_empty()).map(|s| s.as_str()), Some(&event.event_type));
                                             }
                                         }
 
@@ -363,7 +401,8 @@ async fn main() -> Result<()> {
     };
     
     let engine = Arc::new(Mutex::new(engine));
-    let notifier = Arc::new(Mutex::new(NotificationManager::new(300))); // 60 seconds cooldown
+    let user_config = config::ConfigManager::load();
+    let notifier = Arc::new(Mutex::new(NotificationManager::new(300, user_config)));
 
     let engine_dbus = engine.clone();
     let notifier_dbus = notifier.clone();
