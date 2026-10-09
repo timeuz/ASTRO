@@ -37,14 +37,17 @@ class SessionFeedItem extends PopupMenu.PopupBaseMenuItem {
         let headerBox = new St.BoxLayout({ x_expand: true });
         vbox.add_child(headerBox);
         
-        let titleText = `Session ${session.id || 'Unknown'}`;
+        let agentName = session.agent_name || 'Gemini CLI';
+        let agentColor = agentName === 'Antigravity' ? '#bb86fc' : '#03dac6';
+        
+        let titleText = `[${agentName}] Session ${session.id || 'Unknown'}`;
         if (session.status) {
             titleText += ` • ${session.status}`;
         }
         
         let title = new St.Label({ 
             text: titleText,
-            style: 'font-weight: bold;',
+            style: `font-weight: bold; color: ${agentColor};`,
             x_expand: true
         });
         title.clutter_text.ellipsize = Pango.EllipsizeMode.END;
@@ -84,13 +87,22 @@ class SessionFeedItem extends PopupMenu.PopupBaseMenuItem {
             actionBox.add_child(folderBtn);
         }
         
-        let silenceBtn = new St.Button({ label: 'Silence', style_class: 'button', can_focus: true });
-        silenceBtn.connect('clicked', () => {
-            Main.notify('ASTRO', `Silenced session ${session.id}`);
-            if (onSilenced) onSilenced();
-            this.destroy();
-        });
-        actionBox.add_child(silenceBtn);
+        if (agentName === 'Antigravity') {
+            let unsupportedLabel = new St.Label({
+                text: '(Silence unsupported via log-tail)',
+                style: 'font-size: 0.8em; color: #888888; margin-top: 4px;',
+                y_align: Clutter.ActorAlign.CENTER
+            });
+            actionBox.add_child(unsupportedLabel);
+        } else {
+            let silenceBtn = new St.Button({ label: 'Silence', style_class: 'button', can_focus: true });
+            silenceBtn.connect('clicked', () => {
+                Main.notify('ASTRO', `Silenced session ${session.id}`);
+                if (onSilenced) onSilenced();
+                this.destroy();
+            });
+            actionBox.add_child(silenceBtn);
+        }
     }
 }
 

@@ -1,0 +1,23 @@
+--- daemon/agent-companiond/src/main.rs
++++ daemon/agent-companiond/src/main.rs
+@@ -10,6 +10,7 @@
+ use tokio::net::{UnixListener, UnixStream};
+ use std::os::unix::fs::PermissionsExt;
+ use std::fs::Permissions;
++use std::process::Command;
+ use serde::{Deserialize, Serialize};
+ use zbus::{connection, interface};
+ use tracing::{error, info};
+@@ -183,6 +184,13 @@
+                                             if let Some(msg) = eng.get_message(&event.event_type, &Severity::Info) {
+                                                 info!("Microcopy message: {}", msg);
+                                             }
+                                         }
++                                        
++                                        // Bridge to DBus
++                                        let _ = Command::new("dbus-send")
++                                            .args(["--session", "--type=signal", "/org/astro/Service", "org.astro.Service.EventReceived", &format!("string:{}", line)])
++                                            .spawn();
+ 
+                                         let response = b"OK\n";
+                                         if let Err(e) = reader.get_mut().write_all(response).await {
