@@ -1,0 +1,11 @@
+{
+  "event": "session_start",
+  "session_id": "test-session-123",
+  "agent": "Antigravity",
+  "cli_version": "1.3.2",
+  "timestamp": 1791502013,
+  "payload": {
+    "redacted": true,
+    "msg": "Prompt sanitizado para CI"
+  }
+}

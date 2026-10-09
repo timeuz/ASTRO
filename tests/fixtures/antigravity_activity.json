@@ -1,0 +1,13 @@
+{
+  "version": "1.0",
+  "agent_name": "Antigravity",
+  "session_id": "bc02f440-8ca9-4760-bf07-b7e923f7fee5",
+  "event_type": "activity",
+  "state": "working",
+  "timestamp": 1791504000,
+  "payload": {
+    "action": "view_file",
+    "target": "/home/user/project/main.py",
+    "redacted": true
+  }
+}

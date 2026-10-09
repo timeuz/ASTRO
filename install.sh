@@ -56,7 +56,7 @@ do_install() {
     cp daemon/agent-companiond/target/release/agent-companiond "$DEST_DIR/"
     
     echo "Instalando hooks no Gemini CLI..."
-    ./scripts/install-hooks.sh
+    python3 scripts/astro_config_manager.py install --yes
     
     # Note: Copying to /usr/share usually requires sudo, 
     # For user installation, we can copy microcopy.json to ~/.config/astro-agent-companion/
@@ -77,7 +77,7 @@ do_uninstall() {
         echo "[PREVIEW] O que será removido:"
         echo "- Binário $DEST_DIR/agent-companiond"
         echo "- Configurações em $USER_SHARE_DIR"
-        echo "- Hooks via scripts/uninstall-hooks.sh se existir"
+        echo "- Hooks via astro_config_manager.py"
         exit 0
     fi
     
@@ -85,8 +85,8 @@ do_uninstall() {
     rm -f "$DEST_DIR/agent-companiond"
     rm -rf "$USER_SHARE_DIR"
     
-    if [ -f "./scripts/uninstall-hooks.sh" ]; then
-        ./scripts/uninstall-hooks.sh || true
+    if [ -f "./scripts/astro_config_manager.py" ]; then
+        python3 scripts/astro_config_manager.py uninstall
     fi
     
     echo "ASTRO removido completamente."

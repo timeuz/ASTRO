@@ -16,30 +16,44 @@ O projeto segue a governança rigorosa do Gitflow e foi construído com a seguin
 
 ---
 
-## 🚀 Como Fazer o Assistente Funcionar (Para Usuários Finais)
+## 🚀 Como Instalar e Testar o Assistente
 
-Siga os passos abaixo para testar, compilar e habilitar o ASTRO no seu ambiente de desenvolvimento.
+Criamos um script automatizado que faz todo o trabalho duro de compilação e configuração do ambiente para você de forma segura.
 
-### 1. Compilar os Binários e Iniciar o Daemon
+### 1. Instalação Automática
 
-O "cérebro" do ASTRO roda em background para orquestrar as mensagens de forma segura (garantindo sua privacidade).
+Para compilar os binários em Rust, configurar a infraestrutura de backend e plugar os interceptadores do Antigravity CLI, basta rodar na raiz do projeto:
 
 ```bash
-# Entre na pasta do daemon e recompile os binários Rust
-cd daemon
-cargo build --release
+# Você pode visualizar o que o script fará usando:
+./install.sh --preview
 
-# Inicie o Daemon em background (ele vai ouvir eventos no socket em $XDG_RUNTIME_DIR)
-./agent-companiond/target/release/agent-companiond &
+# Para efetivar a instalação no seu usuário:
+./install.sh
 ```
 
-### 2. Ativar a Extensão do GNOME Shell
+Isso fará o seguinte:
+- Checa dependências (Rust, Python, Git).
+- Compila o `agent-companiond` e o `agent-companion-hook` em release.
+- Move o Daemon para `~/.local/bin/agent-companiond`.
+- Copia a personalidade (`microcopy.json`) para a sua pasta de configuração `~/.config/astro-agent-companion/`.
+- Instala os hooks integrados de maneira idempotente com backup automático.
 
-A extensão é a sua ponte visual. Para que ela apareça no painel superior:
+### 2. Iniciar o Daemon
+
+Com a instalação finalizada, você pode subir o motor do ASTRO:
 
 ```bash
-# 1. Volte para a raiz do projeto e crie o link simbólico
-cd ..
+# Inicie o Daemon em background (ele vai ouvir eventos no socket isolado em $XDG_RUNTIME_DIR)
+agent-companiond &
+```
+
+### 3. Ativar a Extensão do GNOME Shell
+
+A extensão é a sua ponte visual. Para ativá-la:
+
+```bash
+# 1. Crie o link simbólico
 mkdir -p ~/.local/share/gnome-shell/extensions/
 ln -s $(pwd)/extension ~/.local/share/gnome-shell/extensions/astro-spike@astro.project.org
 
@@ -48,17 +62,15 @@ ln -s $(pwd)/extension ~/.local/share/gnome-shell/extensions/astro-spike@astro.p
 # 3. Habilite a extensão
 gnome-extensions enable astro-spike@astro.project.org
 ```
-Você deverá ver um novo ícone (indicador de sessão) no seu painel superior!
+Você deverá ver o indicador de sessão no seu painel superior!
 
-### 3. Instalar o Hook no Agente de IA
+### 4. Desinstalação
 
-Para que o agente (como o Antigravity) avise o ASTRO sempre que começar a pensar ou usar uma ferramenta, você deve habilitar o hook:
+Caso precise remover a infraestrutura limpa, rode:
 
 ```bash
-# Instala de forma segura os hooks no ~/.gemini/hooks.json ou equivalente
-./scripts/install-hooks.sh
+./install.sh --uninstall
 ```
-*(Dica: você pode rodar `./scripts/install-hooks.sh --preview` para visualizar as mudanças sem aplicá-las).*
 
 ### 4. Personalizar e Configurar (GTK4 App)
 

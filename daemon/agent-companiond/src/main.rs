@@ -232,11 +232,17 @@ async fn run_uds(engine: Arc<Mutex<MicrocopyEngine>>) -> Result<()> {
                                         event.payload = serde_json::json!({ "redacted": true, "msg": "Payload sanitizado para evitar vazamento" });
                                         info!("Received UDS Event: type={} agent={} session={} timestamp={}", event.event_type, event.agent_name, event.session_id, event.timestamp);
                                         
+
                                         if let Ok(mut eng) = engine_clone.lock() {
                                             if let Some(msg) = eng.get_message(&event.event_type, &Severity::Info) {
                                                 info!("Microcopy message: {}", msg);
                                             }
                                         }
+
+                                        let _ = std::process::Command::new("dbus-send")
+                                            .args(["--session", "--type=signal", "/org/astro/Service", "org.astro.Service.EventReceived", &format!("string:{}", line)])
+                                            .spawn();
+
 
                                         let response = b"OK\n";
                                         if let Err(e) = reader.get_mut().write_all(response).await {

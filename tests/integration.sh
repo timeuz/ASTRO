@@ -119,7 +119,7 @@ if grep -q "secret_multi_session_" "$LOG_FILE"; then
 fi
 
 # Check for redacted payload
-if ! grep -q "\[REDACTED, len=" "$LOG_FILE"; then
+if ! grep -q ""redacted": true" "$LOG_FILE"; then
     echo "Privacy Test Failed! Did not find REDACTED payloads in logs."
     exit 1
 fi
