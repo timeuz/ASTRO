@@ -25,18 +25,38 @@ def check_daemon():
     except Exception:
         return False
 
-def check_extension():
+def check_extension_status():
     try:
-        result = subprocess.run(["gnome-extensions", "list"], capture_output=True, text=True)
-        return "astro@local" in result.stdout or "astro-extension" in result.stdout
+        # Check if installed
+        list_all = subprocess.run(["gnome-extensions", "list"], capture_output=True, text=True).stdout
+        if "astro-spike@astro.project.org" not in list_all:
+            return "MISSING"
+            
+        # Check info to determine state
+        info = subprocess.run(["gnome-extensions", "info", "astro-spike@astro.project.org"], capture_output=True, text=True).stdout
+        if "State: ENABLED" in info:
+            return "ENABLED"
+        elif "State: DISABLED" in info:
+            return "DISABLED"
+        elif "State: ERROR" in info or "State: OUT_OF_DATE" in info:
+            return "ERROR"
+        else:
+            return "UNKNOWN"
     except Exception:
-        return False
+        return "UNKNOWN"
 
 def check_hook():
     # Simple check if hook is installed (e.g. wrapper in ~/.local/bin)
     return os.path.exists(os.path.expanduser("~/.local/bin/gemini"))
 
 def main():
+    # Ensure XDG_RUNTIME_DIR and DBUS are present
+    if not os.environ.get("DBUS_SESSION_BUS_ADDRESS") or not os.environ.get("XDG_RUNTIME_DIR"):
+        console.print("[yellow]Aviso: DBUS_SESSION_BUS_ADDRESS ou XDG_RUNTIME_DIR não definidos.[/yellow]")
+        console.print("O onboarding requer uma sessão de usuário ativa para verificar os serviços do ASTRO corretamente.")
+        console.print("Se você acabou de instalar o pacote sem estar em um terminal gráfico de usuário, inicie sua sessão GNOME e execute este script novamente.")
+        return
+
     console.clear()
     
     title = Text("Bem-vindo ao ASTRO", style="bold cyan", justify="center")
@@ -58,18 +78,35 @@ Sua principal função é dar a você **visibilidade e controle** sobre o que os
 
     console.print("[bold]Diagnosticando o sistema...[/bold]")
     daemon_ok = check_daemon()
-    ext_ok = check_extension()
+    ext_status = check_extension_status()
     hook_ok = check_hook()
 
     console.print(f"Daemon (agent-companiond): {'[green]Ativo[/green]' if daemon_ok else '[red]Inativo[/red]'}")
-    console.print(f"Extensão GNOME: {'[green]Ativa[/green]' if ext_ok else '[yellow]Não encontrada ou Desativada[/yellow]'}")
+    
+    if ext_status == "ENABLED":
+        ext_display = "[green]Ativa[/green]"
+    elif ext_status == "DISABLED":
+        ext_display = "[yellow]Desativada[/yellow]"
+    elif ext_status == "MISSING":
+        ext_display = "[red]Não encontrada[/red]"
+    elif ext_status == "ERROR":
+        ext_display = "[red]Incompatível/Erro[/red]"
+    else:
+        ext_display = "[yellow]Desconhecido[/yellow]"
+        
+    console.print(f"Extensão GNOME: {ext_display}")
     console.print(f"Hooks (Gemini CLI): {'[green]Instalados[/green]' if hook_ok else '[yellow]Não instalados[/yellow]'}")
     print()
 
-    if not ext_ok:
-        console.print("[yellow]Aviso:[/yellow] A extensão do GNOME não parece estar ativa.")
-        console.print("Para ativar, você pode usar o aplicativo 'Extensões' do GNOME ou executar:")
-        console.print("  gnome-extensions enable astro@local")
+    if ext_status != "ENABLED":
+        console.print("[yellow]Aviso:[/yellow] A extensão do GNOME não está ativa ou possui problemas.")
+        if ext_status == "MISSING":
+            console.print("A extensão não foi encontrada no sistema. Verifique a instalação do pacote.")
+        elif ext_status == "DISABLED" or ext_status == "UNKNOWN":
+            console.print("Para ativar, você pode usar o aplicativo 'Extensões' do GNOME ou executar:")
+            console.print("  gnome-extensions enable astro-spike@astro.project.org")
+        elif ext_status == "ERROR":
+            console.print("A extensão apresenta um erro de compatibilidade com sua versão do GNOME.")
         print()
 
     if not hook_ok:
