@@ -134,13 +134,19 @@ class AstroIndicator extends PanelMenu.Button {
         this.add_child(box);
         
         // Menu Popover
-        let headerItem = new PopupMenu.PopupMenuItem('Agent Sessions', { reactive: false });
-        headerItem.label.add_style_class_name('astro-menu-header');
-        this.menu.addMenuItem(headerItem);
+        let geminiHeaderItem = new PopupMenu.PopupMenuItem('Gemini CLI Sessions', { reactive: false });
+        geminiHeaderItem.label.add_style_class_name('astro-menu-header');
+        this.menu.addMenuItem(geminiHeaderItem);
+        this._geminiSection = new PopupMenu.PopupMenuSection();
+        this.menu.addMenuItem(this._geminiSection);
+        
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
         
-        this._feedSection = new PopupMenu.PopupMenuSection();
-        this.menu.addMenuItem(this._feedSection);
+        let antigravHeaderItem = new PopupMenu.PopupMenuItem('Antigravity Sessions', { reactive: false });
+        antigravHeaderItem.label.add_style_class_name('astro-menu-header');
+        this.menu.addMenuItem(antigravHeaderItem);
+        this._antigravitySection = new PopupMenu.PopupMenuSection();
+        this.menu.addMenuItem(this._antigravitySection);
         
         this._proxy = null;
         this._signalId = 0;
@@ -218,7 +224,13 @@ class AstroIndicator extends PanelMenu.Button {
             this._updateBadge();
         });
         
-        this._feedSection.addMenuItem(item, 0);
+        let agentName = session.agent_name || 'Gemini CLI';
+        if (agentName === 'Antigravity') {
+            this._antigravitySection.addMenuItem(item, 0);
+        } else {
+            this._geminiSection.addMenuItem(item, 0);
+        }
+        
         this._feedItems.unshift(item);
         
         // Truncate
