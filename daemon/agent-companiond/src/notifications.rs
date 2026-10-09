@@ -21,7 +21,7 @@ impl NotificationManager {
         }
     }
 
-    pub fn notify_if_needed(&mut self, agent: &str, session_id: &str, state: &SessionState, msg: Option<&str>, category: Option<&str>) {
+    pub fn notify_if_needed(&mut self, agent: &str, session_id: &str, state: &SessionState, msg: Option<&str>, category: Option<&str>, payload_hash: u64) {
         if let Some(cat) = category {
             if self.user_config.muted_categories.contains(&cat.to_string()) {
                 return;
@@ -40,12 +40,13 @@ impl NotificationManager {
             _ => return, // Don't notify for other states
         };
 
-        let key = format!("{}-{:?}", session_id, state);
+        // Key based on session, state, AND payload hash to differentiate distinct requests
+        let key = format!("{}-{:?}-{:016x}", session_id, state, payload_hash);
         let now = Instant::now();
 
         if let Some(last) = self.last_notified.get(&key) {
             if now.duration_since(*last) < self.cooldown {
-                return; // Cooldown active
+                return; // Cooldown active for THIS exact request
             }
         }
 
@@ -64,5 +65,36 @@ impl NotificationManager {
         {
             error!("Failed to send desktop notification: {}", e);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::thread;
+
+    #[test]
+    fn test_cooldown_same_payload() {
+        let mut config = UserConfig::default();
+        let mut manager = NotificationManager::new(5, config);
+        let state = SessionState::WaitingPermission;
+        
+        // Mock command execution to not actually call notify-send in tests, 
+        // wait, we shouldn't mock it, but Command::new("notify-send") will fail silently in test if not found.
+        // For cooldown logic, we just check `last_notified` length or updates.
+        
+        manager.notify_if_needed("Agent1", "Sess1", &state, None, None, 12345);
+        assert_eq!(manager.last_notified.len(), 1);
+        
+        let first_instant = *manager.last_notified.get("Sess1-WaitingPermission-0000000000003039").unwrap();
+        
+        // Same payload -> should be skipped (cooldown)
+        manager.notify_if_needed("Agent1", "Sess1", &state, None, None, 12345);
+        let second_instant = *manager.last_notified.get("Sess1-WaitingPermission-0000000000003039").unwrap();
+        assert_eq!(first_instant, second_instant); // Did not update
+        
+        // Different payload -> should be processed
+        manager.notify_if_needed("Agent1", "Sess1", &state, None, None, 67890);
+        assert_eq!(manager.last_notified.len(), 2);
     }
 }

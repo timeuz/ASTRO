@@ -163,8 +163,14 @@ impl AgentCompanion {
         // Try parsing event to notify
         if let Ok(event) = serde_json::from_str::<CanonicalEvent>(&payload) {
             if let Some(state) = &event.state {
+                use std::hash::{Hash, Hasher};
+                use std::collections::hash_map::DefaultHasher;
+                let mut hasher = DefaultHasher::new();
+                event.payload.to_string().hash(&mut hasher);
+                let payload_hash = hasher.finish();
+                
                 if let Ok(mut notifier) = self.notifier.lock() {
-                    notifier.notify_if_needed(&event.agent_name, &event.session_id, state, Some(&msg).filter(|s| !s.is_empty()).map(|s| s.as_str()), Some(&event.event_type));
+                    notifier.notify_if_needed(&event.agent_name, &event.session_id, state, Some(&msg).filter(|s| !s.is_empty()).map(|s| s.as_str()), Some(&event.event_type), payload_hash);
                 }
             }
         }
@@ -281,6 +287,12 @@ async fn run_uds(engine: Arc<Mutex<MicrocopyEngine>>, notifier: Arc<Mutex<Notifi
                             Ok(_) => {
                                 match serde_json::from_str::<CanonicalEvent>(&line) {
                                     Ok(mut event) => {
+                                        use std::hash::{Hash, Hasher};
+                                        use std::collections::hash_map::DefaultHasher;
+                                        let mut hasher = DefaultHasher::new();
+                                        event.payload.to_string().hash(&mut hasher);
+                                        let payload_hash = hasher.finish();
+
                                         // Sanitize payload
                                         event.payload = serde_json::json!({ "redacted": true, "msg": "Payload sanitizado para evitar vazamento" });
                                         info!("Received UDS Event: type={} agent={} session={} timestamp={}", event.event_type, event.agent_name, event.session_id, event.timestamp);
@@ -295,7 +307,7 @@ async fn run_uds(engine: Arc<Mutex<MicrocopyEngine>>, notifier: Arc<Mutex<Notifi
 
                                         if let Some(state) = &event.state {
                                             if let Ok(mut notif) = notifier_clone.lock() {
-                                                notif.notify_if_needed(&event.agent_name, &event.session_id, state, Some(&microcopy_msg).filter(|s| !s.is_empty()).map(|s| s.as_str()), Some(&event.event_type));
+                                                notif.notify_if_needed(&event.agent_name, &event.session_id, state, Some(&microcopy_msg).filter(|s| !s.is_empty()).map(|s| s.as_str()), Some(&event.event_type), payload_hash);
                                             }
                                         }
 
