@@ -178,6 +178,12 @@ def do_status(config_path: Path):
         "daemon_alive": daemon_alive
     }, indent=2))
 
+def check_antigravity():
+    brain_dir = Path.home() / ".gemini" / "antigravity-cli" / "brain"
+    if brain_dir.exists():
+        print("\n[ASTRO] Antigravity CLI v1.3+ detectado.")
+        print("[ASTRO] Nenhuma injeção de hook necessária (File-Tail Adapter).")
+
 if __name__ == "__main__":
     check_antigravity()
     if len(sys.argv) < 2:
@@ -185,7 +191,8 @@ if __name__ == "__main__":
         sys.exit(1)
         
     cmd = sys.argv[1]
-    auto_confirm = "--yes" in sys.argv
+    # Handle --force synonym for --yes in QA scripts
+    auto_confirm = "--yes" in sys.argv or "--force" in sys.argv
     
     # Permite override via env para testes E2E (T01-T16)
     target = Path(os.environ.get("ASTRO_HOOKS_JSON", CONFIG_FILE_DEFAULT))
@@ -199,10 +206,3 @@ if __name__ == "__main__":
     else:
         print("Comando inválido.")
         sys.exit(1)
-
-
-def check_antigravity():
-    brain_dir = Path.home() / ".gemini" / "antigravity-cli" / "brain"
-    if brain_dir.exists():
-        print("\n[ASTRO] Antigravity CLI v1.3+ detectado.")
-        print("[ASTRO] Nenhuma injeção de hook necessária (File-Tail Adapter).")
