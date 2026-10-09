@@ -1,6 +1,7 @@
 {
-  "name": "ASTRO Spike",
-  "description": "ASTRO Phase 0 Spike - Panel Indicator & D-Bus",
+  "name": "ASTRO Agent Companion",
+  "version": "1.0.0-beta.1",
+  "description": "ASTRO Agent Companion Beta - Observador de sessões para agentes AI",
   "uuid": "astro-spike@astro.project.org",
   "shell-version": ["45", "46", "47"],
   "url": ""
