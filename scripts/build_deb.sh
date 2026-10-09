@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-VERSION="1.0.0-beta.1"
+VERSION="1.0.0-beta.2"
 ARCH="amd64"
 PKG_NAME="astro-agent-companion"
 BUILD_DIR="build/${PKG_NAME}_${VERSION}_${ARCH}"
@@ -53,7 +53,7 @@ cp -r docs/* "$BUILD_DIR/usr/share/astro-agent/docs/"
 # Post-install script
 cat <<POSTINST > "$BUILD_DIR/DEBIAN/postinst"
 #!/bin/bash
-systemctl --user daemon-reload || true
+
 # Orientacao de onboarding CLI
 echo "ASTRO instalado. Para iniciar, execute:"
 echo "python3 /usr/share/astro-agent/scripts/onboarding.py"
